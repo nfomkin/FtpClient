@@ -12,8 +12,6 @@ import java.util.List;
 
 
 public class FtpClient {
-    private String user;
-    private String password;
     private String ip;
     private String localPath;
     private String serverPath;
@@ -25,30 +23,16 @@ public class FtpClient {
     private static final Integer port = 21;
 
 
-    public FtpClient(String user, String password, String ip) {
-        this.user = user;
-        this.password = password;
+    public FtpClient(String ip) throws IOException {
         this.ip = ip;
+        socket = new Socket(ip, port);
+        hostAddress = socket.getLocalAddress().getHostAddress();
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        out = new PrintStream(socket.getOutputStream(), true);
         this.mode = Mode.Active;
-    }
-
-    public FtpClient() {
-    }
-
-    public String getUser() {
-        return user;
-    }
-
-    public void setUser(String user) {
-        this.user = user;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
+        if (!connected()) {
+            throw new IOException();
+        }
     }
 
     public String getIp() {
@@ -68,37 +52,22 @@ public class FtpClient {
         this.mode = mode;
     }
 
-    public boolean login() throws IOException {
-        if (executeCommand(Commands.User, user)) {
-            if (executeCommand(Commands.Password, password)) {
+    public boolean login(String user, String password) throws IOException {
+        if (executeCommand(Command.User, user)) {
+            if (executeCommand(Command.Password, password)) {
                 return true;
             }
         }
         return false;
     }
 
-    public boolean open() throws IOException {
-        socket = new Socket(ip, port);
-        hostAddress = socket.getLocalAddress().getHostAddress();
-        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        out = new PrintStream(socket.getOutputStream(), true);
+    private boolean connected() throws IOException {
         String reply = readReply();
-        if (reply.startsWith("220")) {
-            return true;
-        }
-        return false;
+        return reply.startsWith("220");
     }
-
-    public void start() throws IOException {
-        login();
-        setMode();
-        get();
-        quit();
-    }
-
 
     public boolean get() throws IOException {
-        return executeCommand(Commands.Get, serverPath);
+        return executeCommand(Command.Get, serverPath);
     }
 
     private boolean setMode() throws IOException {
@@ -108,14 +77,14 @@ public class FtpClient {
             System.out.println("Get data port:" + port);
             int x = (int) Math.round((port / 256) - 0.5);
             int y = port - x * 256;
-            result = executeCommand(Commands.Active, (hostAddress.replace('.', ',') + "," + x + "," + y));
+            result = executeCommand(Command.Active, (hostAddress.replace('.', ',') + "," + x + "," + y));
         } else if (mode.equals(Mode.Passive)) {
-            result = executeCommand(Commands.Passive, null);
+            result = executeCommand(Command.Passive, null);
         }
         return result;
     }
 
-    public boolean executeCommand(Commands command, String arg) throws IOException {
+    public boolean executeCommand(Command command, String arg) throws IOException {
         boolean successful = false;
         out.println(command.name + " " + arg);
         String reply = readReply();
@@ -145,7 +114,7 @@ public class FtpClient {
 
 
     public void quit() throws IOException {
-        out.println(Commands.Quit.name);
+        out.println(Command.Quit.name);
         System.out.println(readReply());
         socket.close();
         in.close();

@@ -2,7 +2,7 @@ package ru.nfomkin.ftpclient.ftp;
 
 import java.util.List;
 
-public enum Commands {
+public enum Command {
 
     Get("RETR", List.of(150, 226)),
     User("USER", List.of(331)),
@@ -15,7 +15,7 @@ public enum Commands {
     final String name;
     final List<Integer> successCodes;
 
-    Commands(String name, List<Integer> successCodes) {
+    Command(String name, List<Integer> successCodes) {
         this.name = name;
         this.successCodes = successCodes;
     }
