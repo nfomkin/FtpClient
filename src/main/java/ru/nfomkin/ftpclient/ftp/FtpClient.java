@@ -1,48 +1,54 @@
 package ru.nfomkin.ftpclient.ftp;
 
-import ru.nfomkin.ftpclient.Student;
-import ru.nfomkin.ftpclient.StudentDto;
+import ru.nfomkin.ftpclient.exception.CommandException;
+import ru.nfomkin.ftpclient.exception.ConnectionException;
+import ru.nfomkin.ftpclient.student.StudentJsonParser;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.List;
+import java.util.StringTokenizer;
 
 
 public class FtpClient {
     private String ip;
     private String localPath;
     private String serverPath;
-    private Socket socket;
+    private Socket cmdSocket;
     private BufferedReader in;
     private PrintStream out;
     private Mode mode;
     private String hostAddress;
+    private StudentJsonParser parser;
+    private String reply;
     private static final Integer port = 21;
 
 
-    public FtpClient(String ip) throws IOException {
+    public FtpClient(String ip, String localPath, String serverPath) throws ConnectionException {
         this.ip = ip;
-        socket = new Socket(ip, port);
-        hostAddress = socket.getLocalAddress().getHostAddress();
-        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        out = new PrintStream(socket.getOutputStream(), true);
-        this.mode = Mode.Active;
-        if (!connected()) {
-            throw new IOException();
+        try {
+            cmdSocket = new Socket(ip, port);
+            hostAddress = cmdSocket.getLocalAddress().getHostAddress();
+            in = new BufferedReader(new InputStreamReader(cmdSocket.getInputStream()));
+            out = new PrintStream(cmdSocket.getOutputStream(), true);
+            if (!isConnected()) {
+                throw new IOException();
+            }
+        } catch (IOException ex) {
+            throw new ConnectionException("Не удается подключиться к серверу");
         }
+        this.mode = Mode.Active;
+        this.localPath = localPath;
+        this.serverPath = serverPath;
+        this.parser = new StudentJsonParser();
     }
 
     public String getIp() {
         return ip;
     }
-
-    public void setIp(String ip) {
-        this.ip = ip;
-    }
-
 
     public Mode getMode() {
         return mode;
@@ -61,34 +67,116 @@ public class FtpClient {
         return false;
     }
 
-    private boolean connected() throws IOException {
-        String reply = readReply();
+    private boolean isConnected() throws IOException {
+        reply = readReply();
         return reply.startsWith("220");
     }
 
-    public boolean get() throws IOException {
-        return executeCommand(Command.Get, serverPath);
-    }
+    public String get() throws IOException {
+        System.out.println("Method get");
+        Socket dataSocket = null;
+        ServerSocket serverSocket = null;
 
-    private boolean setMode() throws IOException {
-        boolean result = false;
-        if (mode.equals(Mode.Active)) {
-            int port = getDataPort();
-            System.out.println("Get data port:" + port);
-            int x = (int) Math.round((port / 256) - 0.5);
-            int y = port - x * 256;
-            result = executeCommand(Command.Active, (hostAddress.replace('.', ',') + "," + x + "," + y));
-        } else if (mode.equals(Mode.Passive)) {
-            result = executeCommand(Command.Passive, null);
+        if (mode.equals(Mode.Passive)) {
+            dataSocket = passive();
+        } else if (mode.equals(Mode.Active)) {
+            serverSocket = active();
         }
-        return result;
+
+        if (!executeCommand(Command.Get, serverPath)) {
+            throw new CommandException("Команда -- Get, неуспешно");
+        }
+
+        if (serverSocket != null) {
+            dataSocket = serverSocket.accept();
+        }
+
+        try (BufferedReader dataIn = new BufferedReader(new InputStreamReader(dataSocket.getInputStream()))) {
+            StringBuilder result = new StringBuilder();
+            while (dataIn.ready()) {
+                result.append(dataIn.readLine());
+            }
+            readReply();
+            return result.toString();
+
+
+        } finally {
+            if (dataSocket != null) {
+                dataSocket.close();
+            }
+            if (serverSocket != null) {
+                serverSocket.close();
+            }
+
+        }
     }
 
-    public boolean executeCommand(Command command, String arg) throws IOException {
+    public void put(String file) throws IOException {
+        Socket dataSocket = null;
+        ServerSocket serverSocket = null;
+
+        if (mode.equals(Mode.Active)) {
+            serverSocket = active();
+        } else if (mode.equals(Mode.Passive)) {
+            dataSocket = passive();
+        }
+
+        if (!executeCommand(Command.Put, serverPath)) {
+            if (dataSocket != null) {
+                dataSocket.close();
+            }
+            if (serverSocket != null) {
+                serverSocket.close();
+            }
+            throw new CommandException("Команда -- Put, неуспешно");
+        }
+
+        if (serverSocket != null) {
+            dataSocket = serverSocket.accept();
+        }
+
+        try (PrintStream dataOut = new PrintStream(dataSocket.getOutputStream(), true)) {
+            dataOut.println(file);
+        } finally {
+            readReply();
+            dataSocket.close();
+        }
+    }
+
+    private Socket passive() throws IOException {
+        if (executeCommand(Command.Passive, "")) {
+            try {
+                int opening = reply.indexOf('(');
+                int closing = reply.indexOf(')', opening + 1);
+
+                String dataLink = reply.substring(opening + 1, closing);
+
+                StringTokenizer tokenizer = new StringTokenizer(dataLink, ",");
+                String ip = tokenizer.nextToken() + '.' + tokenizer.nextToken() + '.' + tokenizer.nextToken() + '.' + tokenizer.nextToken();
+                Integer port = Integer.parseInt(tokenizer.nextToken()) * 256 + Integer.parseInt(tokenizer.nextToken());
+                return new Socket(ip, port);
+            } catch (IOException ex) {
+                throw new IOException("Команда passive не выполнена\n" + ex.getMessage());
+            }
+        }
+        throw new IOException("Команда passive не выполнена");
+    }
+
+    private ServerSocket active() throws IOException {
+        ServerSocket serverSocket = new ServerSocket(0);
+        int port = serverSocket.getLocalPort();
+        int x = (int) Math.round((port / 256) - 0.5);
+        int y = port - x * 256;
+        if (executeCommand(Command.Active, (hostAddress.replace('.', ',') + "," + x + "," + y))) {
+            return serverSocket;
+        }
+        throw new IOException("Команда active не выполнена");
+    }
+
+    private boolean executeCommand(Command command, String arg) throws IOException {
         boolean successful = false;
         out.println(command.name + " " + arg);
-        String reply = readReply();
-        System.out.println(reply);
+        reply = readReply();
         if (command.successCodes.contains(getResponseCode(reply))) {
             successful = true;
         }
@@ -96,49 +184,37 @@ public class FtpClient {
     }
 
     private int getDataPort() {
-        return socket.getLocalPort() + 1;
+        return cmdSocket.getLocalPort() + 1;
     }
 
     private String readReply() throws IOException {
-        StringBuilder result = new StringBuilder();
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        StringBuilder reply = new StringBuilder();
+
+        while (!in.ready()) {
         }
+
         while (in.ready()) {
-            result.append(in.readLine());
+            reply.append(in.readLine());
         }
-        return result.toString();
+        return reply.toString();
     }
 
 
     public void quit() throws IOException {
         out.println(Command.Quit.name);
-        System.out.println(readReply());
-        socket.close();
-        in.close();
-        out.close();
+        if (cmdSocket != null) {
+            cmdSocket.close();
+        }
+        if (in != null) {
+            in.close();
+        }
+        if (out != null) {
+            out.close();
+        }
     }
 
     private Integer getResponseCode(String response) {
         return Integer.parseInt(response.substring(0, 3));
-    }
-
-    public List<Student> getStudentsByName(String name) {
-        return null;
-    }
-
-    public StudentDto getById(Integer id) {
-        return null;
-    }
-
-    public boolean addStudent(StudentDto student) {
-        return true;
-    }
-
-    public boolean deleteById(Integer id) {
-        return true;
     }
 
 }

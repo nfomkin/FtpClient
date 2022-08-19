@@ -1,7 +1,7 @@
 package ru.nfomkin.ftpclient.ftp;
 
 public enum ErrorMessage {
-    Connection("Проблемы с подключением. Попробуйте еще раз"),
+    Connection("Не удается подключиться к серверу. Попробуйте еще раз"),
     Authentication("Проблемы с аутентификацией. Попробуйте еще раз");
 
     public final String message;

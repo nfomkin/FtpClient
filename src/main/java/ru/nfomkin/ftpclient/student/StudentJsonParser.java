@@ -5,15 +5,14 @@ import ru.nfomkin.ftpclient.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.OptionalInt;
 
 public class StudentJsonParser {
 
     public List<Student> fromJson(String json) {
         JSONObject object = new JSONObject(json);
         List<String> students = object.getJSONArray("students").getObjects();
-        List<Student> result = new ArrayList<>(students.size());
-        if (students != null) {
+        List<Student> result = new ArrayList<>();
+        if (!students.isEmpty()) {
             for (String student : students) {
                 Integer id = null;
                 String name = null;
@@ -50,23 +49,5 @@ public class StudentJsonParser {
         json.deleteCharAt(json.length() - 1);
         json.append("]}");
         return json.toString();
-    }
-
-    public String addStudentToJson(String json, StudentDto studentDto) {
-        List<Student> students = fromJson(json);
-        Student student = new Student(studentDto);
-        OptionalInt maxId = students.stream().mapToInt(Student::getId).max();
-        if (maxId.isEmpty()) {
-            student.setId(1);
-        }
-        else {
-            student.setId(maxId.getAsInt() + 1);
-        }
-
-        int lastCloseBracketsIndex = json.lastIndexOf(']');
-        String jsonStudent = toJson(student);
-        StringBuilder builder = new StringBuilder(json);
-        builder.insert(lastCloseBracketsIndex, ",\n" + jsonStudent + '\n');
-        return builder.toString();
     }
 }

@@ -1,16 +1,17 @@
 package ru.nfomkin.ftpclient.ftp;
 
+import java.util.Arrays;
 import java.util.List;
 
 public enum Command {
 
-    Get("RETR", List.of(150, 226)),
-    User("USER", List.of(331)),
-    Password("PASS", List.of(230)),
-    Put("STOR", List.of(150, 226)),
-    Quit("QUIT", List.of(221)),
-    Active("PORT", List.of(200)),
-    Passive("PASV", List.of(227));
+    Get("RETR", Arrays.asList(150, 226)),
+    User("USER", Arrays.asList(331)),
+    Password("PASS", Arrays.asList(230)),
+    Put("STOR", Arrays.asList(150, 226)),
+    Quit("QUIT", Arrays.asList(221)),
+    Active("PORT", Arrays.asList(200)),
+    Passive("PASV", Arrays.asList(227));
 
     final String name;
     final List<Integer> successCodes;
