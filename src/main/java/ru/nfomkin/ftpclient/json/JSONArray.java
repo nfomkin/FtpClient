@@ -1,19 +1,20 @@
-package json;
+package ru.nfomkin.ftpclient.json;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 public class JSONArray {
-    private final static char specialChar;
+    private final static char arrayFieldsDelimiter;
     private final static char commaChar;
 
-    private ArrayList<String> objects;
+    private List<String> objects;
 
     static
     {
-        specialChar = String.valueOf(CONSTANTS.SPECIAL)
+        arrayFieldsDelimiter = String.valueOf(Constant.ARRAY_FIELDS_DELIMITER)
                 .toCharArray()[0];
-        commaChar = String.valueOf(CONSTANTS.COMMA)
+        commaChar = String.valueOf(Constant.COMMA)
                 .toCharArray()[0];
     }
 
@@ -28,9 +29,9 @@ public class JSONArray {
         objects = new ArrayList<String>();
 
         if (arg.startsWith(String.valueOf(
-                CONSTANTS.SQUARE_OPEN_BRACKETS))
+                Constant.SQUARE_OPEN_BRACKETS))
                 && arg.endsWith(String.valueOf(
-                CONSTANTS.SQUARE_CLOSE_BRACKETS))) {
+                Constant.SQUARE_CLOSE_BRACKETS))) {
 
             StringBuilder builder = new StringBuilder(arg);
 
@@ -44,35 +45,37 @@ public class JSONArray {
             Collections.addAll(
                     objects,
                     builder.toString().split(
-                            String.valueOf(CONSTANTS.COMMA)));
+                            String.valueOf(Constant.COMMA)));
         }
+
+        objects.replaceAll(string -> string.replace('|', ','));
     }
 
     // Method 2
     public StringBuilder replaceCOMMA(StringBuilder arg)
     {
-        boolean isArray = false;
+        boolean isObject = false;
 
         for (int i = 0; i < arg.length(); i++) {
             char a = arg.charAt(i);
-            if (isArray) {
+            if (isObject) {
 
                 if (String.valueOf(a).compareTo(
-                        String.valueOf(CONSTANTS.COMMA))
+                        String.valueOf(Constant.COMMA))
                         == 0) {
-                    arg.setCharAt(i, specialChar);
+                    arg.setCharAt(i, arrayFieldsDelimiter);
                 }
             }
 
             if (String.valueOf(a).compareTo(String.valueOf(
-                    CONSTANTS.CURLY_OPEN_BRACKETS))
+                    Constant.CURLY_OPEN_BRACKETS))
                     == 0)
-                isArray = true;
+                isObject = true;
 
             if (String.valueOf(a).compareTo(String.valueOf(
-                    CONSTANTS.CURLY_CLOSE_BRACKETS))
+                    Constant.CURLY_CLOSE_BRACKETS))
                     == 0)
-                isArray = false;
+                isObject = false;
         }
 
         return arg;
@@ -83,21 +86,23 @@ public class JSONArray {
     public String getObject(int index)
     {
         if (objects != null) {
-            return objects.get(index).replace(specialChar,
+            return objects.get(index).replace(arrayFieldsDelimiter,
                     commaChar);
         }
 
         return null;
     }
 
+    public List<String> getObjects() {
+        return objects;
+    }
     // Method 4
     // Getting json object from array list
     public JSONObject getJSONObject(int index)
     {
-
         if (objects != null) {
             return new JSONObject(
-                    objects.get(index).replace('|', ','));
+                    objects.get(index));
         }
 
         return null;
